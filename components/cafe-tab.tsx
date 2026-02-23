@@ -250,7 +250,7 @@ export function CafeTab({ onItemsCollected }: CafeTabProps) {
               <Input
                 value={cafeUrl}
                 onChange={(e) => handleCafeUrlChange(e.target.value)}
-                placeholder="특정 카페 URL (예: https://cafe.naver.com/dinohighclass)"
+                placeholder="특정 카페 URL (예: https://cafe.naver.com/moneytaker)"
                 className="h-9 pl-10 text-sm bg-background border-input"
               />
             </div>
@@ -278,7 +278,7 @@ export function CafeTab({ onItemsCollected }: CafeTabProps) {
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={`검색어 입력 (예: ${DEFAULT_BRAND_KEYWORDS.join(", ")})`}
+                placeholder="검색어를 입력하세요."
                 className="h-10 pl-10 text-sm bg-background border-input"
               />
             </div>

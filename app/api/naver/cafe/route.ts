@@ -79,7 +79,7 @@ export async function GET(request: Request) {
   const display = clamp(parseInt(searchParams.get("display") || "30", 10), 1, 100);
   const start = clamp(parseInt(searchParams.get("start") || "1", 10), 1, 1000);
   const sort = (searchParams.get("sort") || "date").toLowerCase() === "sim" ? "sim" : "date";
-  const cafeId = searchParams.get("cafeId"); // e.g. "dinohighclass"
+  const cafeId = searchParams.get("cafeId"); // e.g. "moneytaker"
 
   if (!keyword) {
     return NextResponse.json({ error: "keyword 파라미터가 필요합니다." }, { status: 400 });

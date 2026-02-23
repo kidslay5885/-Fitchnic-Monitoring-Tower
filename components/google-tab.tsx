@@ -435,7 +435,7 @@ export function GoogleTab({ onItemsCollected }: GoogleTabProps) {
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={`검색어 입력 (예: ${DEFAULT_BRAND_KEYWORDS.join(", ")})`}
+                placeholder="검색어를 입력하세요."
                 className="h-10 pl-10 text-sm bg-background border-input"
               />
             </div>

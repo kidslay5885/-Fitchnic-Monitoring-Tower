@@ -446,7 +446,7 @@ export function UnifiedScan({ onItemsCollected }: UnifiedScanProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={DEFAULT_BRAND_KEYWORDS.join(", ")}
+                placeholder="검색어를 입력하세요."
                 className="h-12 pl-10 pr-4 text-base bg-card border-border shadow-sm"
               />
             </div>
@@ -503,7 +503,7 @@ export function UnifiedScan({ onItemsCollected }: UnifiedScanProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={DEFAULT_BRAND_KEYWORDS.join(", ")}
+                placeholder="검색어를 입력하세요."
                 className="h-10 pl-10 pr-4 text-sm bg-card border-border"
               />
             </div>

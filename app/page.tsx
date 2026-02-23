@@ -39,16 +39,6 @@ export default function Page() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              수집 {totalItems.toLocaleString()}건
-            </span>
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <span className="text-xs font-semibold text-primary">LIVE</span>
-            </div>
           </div>
         </div>
       </header>
