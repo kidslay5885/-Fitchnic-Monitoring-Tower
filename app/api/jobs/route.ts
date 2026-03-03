@@ -1,4 +1,4 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
 import { parseVideoId, collectComments, fetchVideoTitle } from "@/lib/youtube";
 import { getJob, setJob, getAllJobs, generateJobId } from "@/lib/job-store";
 import type { Job } from "@/lib/types";
@@ -54,19 +54,13 @@ export async function POST(request: Request) {
 
     setJob(job);
 
-    // 응답 후에도 함수를 유지하여 백그라운드 수집 완료
-    after(async () => {
-      try {
-        await processJob(job, apiKey);
-      } catch (err: unknown) {
-        const updatedJob = getJob(jobId);
-        if (updatedJob) {
-          updatedJob.status = "error";
-          updatedJob.error = translateError(
-            err instanceof Error ? err.message : String(err)
-          );
-          setJob(updatedJob);
-        }
+    // 백그라운드 수집 시작 (non-blocking)
+    processJob(job, apiKey).catch((err) => {
+      const updatedJob = getJob(jobId);
+      if (updatedJob) {
+        updatedJob.status = "error";
+        updatedJob.error = translateError(err.message);
+        setJob(updatedJob);
       }
     });
 
