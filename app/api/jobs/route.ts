@@ -55,16 +55,20 @@ export async function POST(request: Request) {
     setJob(job);
 
     // 응답 후에도 함수를 유지하여 백그라운드 수집 완료
-    after(
-      processJob(job, apiKey).catch((err) => {
+    after(async () => {
+      try {
+        await processJob(job, apiKey);
+      } catch (err: unknown) {
         const updatedJob = getJob(jobId);
         if (updatedJob) {
           updatedJob.status = "error";
-          updatedJob.error = translateError(err.message);
+          updatedJob.error = translateError(
+            err instanceof Error ? err.message : String(err)
+          );
           setJob(updatedJob);
         }
-      })
-    );
+      }
+    });
 
     return NextResponse.json({ jobId });
   } catch {
