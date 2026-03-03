@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { parseVideoId, collectComments, fetchVideoTitle } from "@/lib/youtube";
 import { getJob, setJob, getAllJobs, generateJobId } from "@/lib/job-store";
 import type { Job } from "@/lib/types";
+
+// Vercel 서버리스 함수 최대 실행 시간 (초)
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -51,15 +54,17 @@ export async function POST(request: Request) {
 
     setJob(job);
 
-    // Start collection in background (non-blocking)
-    processJob(job, apiKey).catch((err) => {
-      const updatedJob = getJob(jobId);
-      if (updatedJob) {
-        updatedJob.status = "error";
-        updatedJob.error = translateError(err.message);
-        setJob(updatedJob);
-      }
-    });
+    // 응답 후에도 함수를 유지하여 백그라운드 수집 완료
+    after(
+      processJob(job, apiKey).catch((err) => {
+        const updatedJob = getJob(jobId);
+        if (updatedJob) {
+          updatedJob.status = "error";
+          updatedJob.error = translateError(err.message);
+          setJob(updatedJob);
+        }
+      })
+    );
 
     return NextResponse.json({ jobId });
   } catch {
