@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,6 @@ import {
   Search,
   ThumbsUp,
   MessageSquareReply,
-  FileJson,
   FileSpreadsheet,
   ChevronDown,
   Flag,
@@ -31,15 +30,13 @@ import {
 import type { CommentRecord } from "@/lib/types";
 import { DEFAULT_NEGATIVE_KEYWORDS } from "@/lib/types";
 
+const PAGE_SIZE = 50;
+
 interface ResultsTableProps {
-  jobId: string;
   videoId: string;
   totalComments: number;
   isDone: boolean;
-}
-
-function buildReportUrl(videoId: string, commentId: string): string {
-  return `https://www.youtube.com/watch?v=${videoId}&lc=${commentId}`;
+  allComments: CommentRecord[];
 }
 
 function matchesNegativeKeywords(
@@ -55,21 +52,67 @@ function matchesNegativeKeywords(
   return null;
 }
 
+function escapeCSV(val: string): string {
+  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+}
+
+function downloadCSV(comments: CommentRecord[], videoId: string) {
+  const headers = [
+    "video_id", "video_url", "comment_id", "thread_id", "parent_id",
+    "is_reply", "author_display_name", "author_channel_id",
+    "author_profile_url", "text_original", "text_plain", "like_count",
+    "published_at", "updated_at", "fetched_at", "source",
+  ];
+  const rows = comments.map((c) =>
+    [
+      escapeCSV(c.video_id), escapeCSV(c.video_url), escapeCSV(c.comment_id),
+      escapeCSV(c.thread_id), escapeCSV(c.parent_id || ""),
+      c.is_reply ? "true" : "false", escapeCSV(c.author_display_name),
+      escapeCSV(c.author_channel_id), escapeCSV(c.author_profile_url),
+      escapeCSV(c.text_original), escapeCSV(c.text_plain),
+      String(c.like_count), escapeCSV(c.published_at),
+      escapeCSV(c.updated_at), escapeCSV(c.fetched_at), escapeCSV(c.source),
+    ].join(",")
+  );
+  const csv = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const now = new Date();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  a.href = url;
+  a.download = `${videoId}_${date}_comments.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadJSONL(comments: CommentRecord[], videoId: string) {
+  const jsonl = comments.map((c) => JSON.stringify(c)).join("\n");
+  const blob = new Blob([jsonl], { type: "application/x-ndjson" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const now = new Date();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  a.href = url;
+  a.download = `${videoId}_${date}_comments.jsonl`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function ResultsTable({
-  jobId,
   videoId,
   totalComments,
   isDone,
+  allComments,
 }: ResultsTableProps) {
-  const [comments, setComments] = useState<CommentRecord[]>([]);
   const [search, setSearch] = useState("");
   const [author, setAuthor] = useState("");
   const [repliesOnly, setRepliesOnly] = useState(false);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
-  const [cursor, setCursor] = useState<number | null>(0);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const loadedRef = useRef(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Negative keywords management
   const [negativeKeywords, setNegativeKeywords] = useState<string[]>(
@@ -89,58 +132,50 @@ export function ResultsTable({
     setNegativeKeywords((prev) => prev.filter((k) => k !== kw));
   };
 
-  const fetchResults = useCallback(
-    async (cursorVal: number, append = false) => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        params.set("cursor", String(cursorVal));
-        if (search) params.set("search", search);
-        if (author) params.set("author", author);
-        if (repliesOnly) params.set("repliesOnly", "true");
-
-        const res = await fetch(
-          `/api/jobs/${jobId}/results?${params.toString()}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-
-        if (append) {
-          setComments((prev) => [...prev, ...data.data]);
-        } else {
-          setComments(data.data);
-        }
-        setTotal(data.total);
-        setCursor(data.cursor);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [jobId, search, author, repliesOnly]
-  );
-
-  // Load initial results when done
-  useEffect(() => {
-    if (isDone && totalComments > 0 && !loadedRef.current) {
-      loadedRef.current = true;
-      fetchResults(0);
+  // Client-side filtering
+  const filtered = useMemo(() => {
+    let result = allComments;
+    if (search) {
+      const lower = search.toLowerCase();
+      result = result.filter(
+        (c) =>
+          c.text_plain.toLowerCase().includes(lower) ||
+          c.text_original.toLowerCase().includes(lower)
+      );
     }
-  }, [isDone, totalComments, fetchResults]);
+    if (author) {
+      const lower = author.toLowerCase();
+      result = result.filter((c) =>
+        c.author_display_name.toLowerCase().includes(lower)
+      );
+    }
+    if (repliesOnly) {
+      result = result.filter((c) => c.is_reply);
+    }
+    return result;
+  }, [allComments, search, author, repliesOnly]);
+
+  const displayComments = useMemo(() => {
+    const base = flaggedOnly
+      ? filtered.filter((c) => matchesNegativeKeywords(c.text_plain, negativeKeywords) !== null)
+      : filtered;
+    return base.slice(0, visibleCount);
+  }, [filtered, flaggedOnly, negativeKeywords, visibleCount]);
+
+  const totalFiltered = flaggedOnly
+    ? filtered.filter((c) => matchesNegativeKeywords(c.text_plain, negativeKeywords) !== null).length
+    : filtered.length;
+
+  const flaggedCount = filtered.filter(
+    (c) => matchesNegativeKeywords(c.text_plain, negativeKeywords) !== null
+  ).length;
 
   const handleSearch = () => {
-    setCursor(0);
-    setComments([]);
-    fetchResults(0);
+    setVisibleCount(PAGE_SIZE);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
-  };
-
-  const handleLoadMore = () => {
-    if (cursor !== null) {
-      fetchResults(cursor, true);
-    }
   };
 
   const formatDate = (iso: string) => {
@@ -158,15 +193,6 @@ export function ResultsTable({
   };
 
   if (!isDone || totalComments === 0) return null;
-
-  // Client-side negative keyword filter
-  const displayComments = flaggedOnly
-    ? comments.filter((c) => matchesNegativeKeywords(c.text_plain, negativeKeywords) !== null)
-    : comments;
-
-  const flaggedCount = comments.filter(
-    (c) => matchesNegativeKeywords(c.text_plain, negativeKeywords) !== null
-  ).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -235,30 +261,25 @@ export function ResultsTable({
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-lg text-card-foreground">
-              수집 결과 ({total.toLocaleString()}건)
+              수집 결과 ({totalFiltered.toLocaleString()}건)
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                asChild
+                onClick={() => downloadCSV(allComments, videoId)}
                 className="border-input bg-secondary text-secondary-foreground hover:bg-muted"
               >
-                <a href={`/api/jobs/${jobId}/download?format=csv`} download>
-                  <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
-                  CSV
-                </a>
+                <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+                CSV
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                asChild
+                onClick={() => downloadJSONL(allComments, videoId)}
                 className="border-input bg-secondary text-secondary-foreground hover:bg-muted"
               >
-                <a href={`/api/jobs/${jobId}/download?format=jsonl`} download>
-                  <FileJson className="mr-1.5 h-3.5 w-3.5" />
-                  JSONL
-                </a>
+                CSV 대신 JSONL
               </Button>
             </div>
           </div>
@@ -290,7 +311,10 @@ export function ResultsTable({
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={repliesOnly}
-                    onCheckedChange={(v) => setRepliesOnly(v)}
+                    onCheckedChange={(v) => {
+                      setRepliesOnly(v);
+                      setVisibleCount(PAGE_SIZE);
+                    }}
                   />
                   <Label className="text-sm text-muted-foreground whitespace-nowrap">
                     대댓글만
@@ -299,7 +323,10 @@ export function ResultsTable({
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={flaggedOnly}
-                    onCheckedChange={(v) => setFlaggedOnly(v)}
+                    onCheckedChange={(v) => {
+                      setFlaggedOnly(v);
+                      setVisibleCount(PAGE_SIZE);
+                    }}
                   />
                   <Label className="text-sm text-destructive whitespace-nowrap">
                     위험 댓글만
@@ -409,7 +436,7 @@ export function ResultsTable({
                         </TableCell>
                         <TableCell className="text-center align-top">
                           <a
-                            href={buildReportUrl(videoId, c.comment_id)}
+                            href={`https://www.youtube.com/watch?v=${videoId}&lc=${c.comment_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium transition-colors ${
@@ -426,7 +453,7 @@ export function ResultsTable({
                       </TableRow>
                     );
                   })}
-                  {displayComments.length === 0 && !isLoading && (
+                  {displayComments.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={6}
@@ -443,17 +470,16 @@ export function ResultsTable({
             </div>
 
             {/* Load more */}
-            {cursor !== null && !flaggedOnly && (
+            {visibleCount < totalFiltered && (
               <div className="flex justify-center">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleLoadMore}
-                  disabled={isLoading}
+                  onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
                   className="border-input bg-secondary text-secondary-foreground hover:bg-muted"
                 >
                   <ChevronDown className="mr-1.5 h-3.5 w-3.5" />
-                  {isLoading ? "불러오는 중..." : "더 보기"}
+                  더 보기 ({Math.min(PAGE_SIZE, totalFiltered - visibleCount)}건)
                 </Button>
               </div>
             )}
