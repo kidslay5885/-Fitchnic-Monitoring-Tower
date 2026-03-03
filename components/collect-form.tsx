@@ -31,7 +31,7 @@ export function CollectForm({ onSubmit, isLoading }: CollectFormProps) {
   const [url, setUrl] = useState("");
   const [order, setOrder] = useState<"time" | "relevance">("relevance");
   const [maxPages, setMaxPages] = useState("0");
-  const [includeReplies, setIncludeReplies] = useState(false);
+  const [includeReplies, setIncludeReplies] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {

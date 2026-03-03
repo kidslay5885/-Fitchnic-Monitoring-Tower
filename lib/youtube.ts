@@ -275,10 +275,10 @@ export async function collectComments(
           comments.set(replyRecord.comment_id, replyRecord);
         }
 
-        // If there are significantly more replies than what's inline, fetch them separately
+        // 인라인에 포함되지 않은 나머지 대댓글을 별도로 가져오기
         const inlineCount = thread.replies.comments.length || 0;
         const totalReplies = thread.snippet.totalReplyCount;
-        if (totalReplies > inlineCount && totalReplies - inlineCount > 5) {
+        if (totalReplies > inlineCount) {
           let replyPageToken: string | undefined;
           while (true) {
             const replyUrl = new URL("https://www.googleapis.com/youtube/v3/comments");

@@ -6,7 +6,7 @@ import type { Job } from "@/lib/types";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { url, order = "time", maxPages = 5, includeReplies = false } = body;
+    const { url, order = "time", maxPages = 0, includeReplies = true } = body;
 
     if (!url || typeof url !== "string") {
       return NextResponse.json(
